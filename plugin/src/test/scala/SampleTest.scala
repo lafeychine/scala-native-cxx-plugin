@@ -7,7 +7,7 @@ class SampleTest extends AnyFunSuite:
         val compiler = DottyCompiler()
 
         val result = compiler.withPlugin("Foo.scala" -> """
-            |@extern object Foo:
+            |@externCxx object Foo:
             |    type FooNative = CStruct2[CInt, CInt]
             |
             |    def ctor(): Unit = extern

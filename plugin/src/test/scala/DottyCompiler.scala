@@ -16,23 +16,23 @@ import dotty.tools.dotc.util.*
 
 class DottyCompiler private (private val outputDir: Path):
 
-    private val classpath = List(sys.props("scalanative.runtime.cp"))
-        .filterNot(_.isEmpty)
-        .mkString("-cp ", File.pathSeparator, "")
-
+    private val cxxlib = sys.props("scalanative.cxxlib.jar")
     private val cxxplugin = sys.props("scalanative.cxxplugin.jar")
+    private val nsclib = sys.props("scalanative.nsclib.cp")
     private val nscplugin = sys.props("scalanative.nscplugin.jar")
 
     def this() =
         this(Files.createTempDirectory("scala-native-cxx-test-" + UUID.randomUUID()).toAbsolutePath)
 
-    private def compile(files: Map[String, String], plugin: Boolean): Array[String] =
-        val printTree = "-Xprint-types -Xprint:scalanative-genNIR"
-        val sourceFiles = writeFiles(files)
-        val plugins = if plugin then s"-Xplugin:$cxxplugin,$nscplugin" else s"-Xplugin:$nscplugin"
+    private def compile(files: Map[String, String], isPluginEnabled: Boolean): Array[String] =
+        val classpath = if isPluginEnabled then s"$cxxlib:$nsclib" else nsclib
+        val plugins = if isPluginEnabled then s"$cxxplugin,$nscplugin" else nscplugin
 
-        val args =
-            CommandLineParser.tokenize(s"-d $outputDir $printTree $plugins $classpath") ++ sourceFiles.map(_.file.absolutePath)
+        val printTree = "-Xprint-types -Xprint:scalanative-genNIR"
+        val sourceFiles = writeFiles(files, isPluginEnabled)
+
+        val args = CommandLineParser.tokenize(s"-d $outputDir $printTree -Xplugin:$plugins -cp $classpath")
+            ++ sourceFiles.map(_.file.absolutePath)
 
         val reporter = TastyReporter()
         val dotty = Driver().process(args.toArray, reporter)
@@ -42,19 +42,23 @@ class DottyCompiler private (private val outputDir: Path):
         reporter.tastyTree
 
     def withPlugin(files: (String, String)*): Array[String] =
-        compile(files.toMap, plugin = true)
+        compile(files.toMap, true)
 
     def withoutPlugin(files: (String, String)*): Array[String] =
-        compile(files.toMap, plugin = false)
+        compile(files.toMap, false)
 
-    private def writeFiles(files: Map[String, String]): Iterable[SourceFile] =
+    private def writeFiles(files: Map[String, String], isPluginEnabled: Boolean): Iterable[SourceFile] =
         Files.walk(outputDir).sorted(Comparator.reverseOrder()).iterator().asScala.foreach(Files.delete)
 
         for (name, content) <- files yield
             val path = outputDir.resolve(name)
 
             Files.createDirectories(path.getParent)
-            Files.writeString(path, "import scala.scalanative.unsafe.*", StandardOpenOption.CREATE)
+            Files.writeString(path, "import scala.scalanative.unsafe.*" + System.lineSeparator(), StandardOpenOption.CREATE)
+
+            if isPluginEnabled then
+                Files.writeString(path, "import scala.scalanative.unsafe.cxx.*" + System.lineSeparator(), StandardOpenOption.APPEND)
+
             Files.write(path, content.stripMargin.getBytes(StandardCharsets.UTF_8), StandardOpenOption.APPEND)
 
             SourceFile(AbstractFile.getFile(path), Codec.default)

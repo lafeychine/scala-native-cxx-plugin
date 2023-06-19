@@ -21,6 +21,8 @@ class ScalaNativeCxx extends PluginPhase:
 
     private var cxxAnnotation: Boolean = false
 
+    def externCxxAnnotation(using Context): TypeRef = requiredClassRef("scala.scalanative.unsafe.cxx.externCxx")
+
     def externAnnotation(using Context): TypeRef = requiredClassRef("scala.scalanative.unsafe.extern")
     def nscNameAnnotation(using Context) = requiredClassRef("scala.scalanative.unsafe.name")
 
@@ -30,9 +32,16 @@ class ScalaNativeCxx extends PluginPhase:
         if !tree.isClassDef then return ctx
 
         for objectAnnotation <- tree.symbol.denot.annotations do
-            if objectAnnotation.matches(externAnnotation.symbol.asClass) then cxxAnnotation = true
+            if objectAnnotation.matches(externCxxAnnotation.symbol.asClass) then cxxAnnotation = true
 
         ctx
+
+    override def transformTypeDef(tree: tpd.TypeDef)(using Context): tpd.Tree =
+        /* Check if a transform is required */
+        if !cxxAnnotation then return tree
+
+        tree.symbol.addAnnotation(Annotation(externAnnotation, Nil))
+        tree
 
     override def transformDefDef(tree: DefDef)(using Context): Tree =
         /* Check if a transform is required */

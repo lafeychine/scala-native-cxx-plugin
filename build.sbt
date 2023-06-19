@@ -1,3 +1,5 @@
+import java.io.File.pathSeparator
+
 val scalaNativeVersion = settingKey[String]("The version of Scala Native used for building.")
 
 ThisBuild / organization := "io.github.lafeychine"
@@ -19,19 +21,19 @@ lazy val plugin = project
         ),
         Test / fork := true,
         Test / javaOptions ++= Seq(
+            "-Dscalanative.cxxlib.jar=" + (lib / Compile / Keys.`package`).value.getAbsolutePath(),
             "-Dscalanative.cxxplugin.jar=" + (Compile / Keys.`package`).value.getAbsolutePath(),
+            "-Dscalanative.nsclib.cp=" + (Test / fullClasspath).value.files.map(_.getAbsolutePath()).mkString(pathSeparator),
             "-Dscalanative.nscplugin.jar=" + (Test / dependencyClasspath).value.files
                 .filter(_.getName().contains("nscplugin"))
                 .head
-                .getAbsolutePath(),
-            "-Dscalanative.runtime.cp=" + (Test / fullClasspath).value.files.map(_.getAbsolutePath()).mkString(":")
+                .getAbsolutePath()
         )
     )
 
 lazy val sandbox = project
     .enablePlugins(ScalaNativePlugin)
     .settings(
-        scalacOptions ++= Seq(
-            "-Xplugin:" + (plugin / Compile / Keys.`package`).value.getAbsolutePath()
-        )
+        Compile / scalacOptions += "-Xplugin:" + (plugin / Compile / Keys.`package`).value.getAbsolutePath(),
+        Compile / unmanagedJars += (lib / Compile / Keys.`package`).value
     )
