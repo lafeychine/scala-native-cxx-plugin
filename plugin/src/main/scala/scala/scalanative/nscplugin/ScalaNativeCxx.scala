@@ -24,7 +24,7 @@ class ScalaNativeCxx extends PluginPhase:
     def externCxxAnnotation(using Context): TypeRef = requiredClassRef("scala.scalanative.unsafe.cxx.externCxx")
 
     def externAnnotation(using Context): TypeRef = requiredClassRef("scala.scalanative.unsafe.extern")
-    def nscNameAnnotation(using Context) = requiredClassRef("scala.scalanative.unsafe.name")
+    def nscNameAnnotation(using Context): TypeRef = requiredClassRef("scala.scalanative.unsafe.name")
 
     override def prepareForTypeDef(tree: TypeDef)(using ctx: Context): Context =
         cxxAnnotation = false
@@ -40,7 +40,8 @@ class ScalaNativeCxx extends PluginPhase:
         /* Check if a transform is required */
         if !cxxAnnotation then return tree
 
-        tree.symbol.addAnnotation(Annotation(externAnnotation, Nil))
+        tree.symbol.addAnnotation(Annotation(externAnnotation, List(), tree.span))
+        tree.symbol.removeAnnotation(externCxxAnnotation.symbol)
         tree
 
     override def transformDefDef(tree: DefDef)(using Context): Tree =
@@ -52,7 +53,8 @@ class ScalaNativeCxx extends PluginPhase:
 
         /* Apply the annotation */
         val constant = Constant("_ZN3FooC2Ev") // Currently, this is just an example
-        val mangledNameAnnotation = Annotation(nscNameAnnotation, Literal(constant).withType(ConstantType(constant)))
+        val mangledNameAnnotation =
+            Annotation(nscNameAnnotation, Literal(constant).withType(ConstantType(constant)), tree.span)
 
         tree.symbol.addAnnotation(mangledNameAnnotation)
         tree
